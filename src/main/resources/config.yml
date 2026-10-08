@@ -1,0 +1,31 @@
+
+# Rudolph Server Menu Configuration
+
+menu:
+  title: "&c&lRudolph &8| &fServer Menu"
+  size: 27
+
+items:
+  spawn:
+    slot: 10
+    material: COMPASS
+    name: "&aSpawn"
+    command: "spawn"
+
+  home:
+    slot: 12
+    material: RED_BED
+    name: "&bHome"
+    command: "home"
+
+  rules:
+    slot: 14
+    material: BOOK
+    name: "&eServer Rules"
+    command: "rules"
+
+  close:
+    slot: 16
+    material: BARRIER
+    name: "&cClose"
+    command: "close"
