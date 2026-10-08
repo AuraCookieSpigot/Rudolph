@@ -1,0 +1,12 @@
+
+name: Rudolph
+version: 1.0.0
+main: com.auracookiespigot.rudolph.RudolphPlugin
+api-version: '1.20'
+description: A customizable Minecraft server menu plugin.
+author: AuraCookieSpigot
+
+commands:
+  rudolph:
+    description: Opens the Rudolph server menu.
+    usage: /rudolph
