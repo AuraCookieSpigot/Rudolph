@@ -1,92 +1,160 @@
 
 package com.auracookiespigot.rudolph;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class RudolphPlugin extends JavaPlugin implements Listener {
 
-    private final String menuTitle = "Rudolph | Server Menu";
-
     @Override
     public void onEnable() {
+        saveDefaultConfig();
         Bukkit.getPluginManager().registerEvents(this, this);
-        getLogger().info("Rudolph has been enabled!");
+        getLogger().info("Rudolph enabled!");
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command,
                              String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage("Only players can open Rudolph.");
+
+        if (!command.getName().equalsIgnoreCase("rudolph")) {
+            return false;
+        }
+
+        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("rudolph.admin")) {
+                sender.sendMessage(ChatColor.RED + "No permission.");
+                return true;
+            }
+
+            reloadConfig();
+            sender.sendMessage(ChatColor.GREEN + "Rudolph reloaded!");
             return true;
         }
 
-        Player player = (Player) sender;
-        openMenu(player);
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("Only players can open the menu.");
+            return true;
+        }
+
+        openMenu((Player) sender);
         return true;
     }
 
-    private void openMenu(Player player) {
-        Inventory menu = Bukkit.createInventory(null, 27, menuTitle);
-
-        menu.setItem(10, createItem(Material.COMPASS, "Spawn"));
-        menu.setItem(12, createItem(Material.RED_BED, "Home"));
-        menu.setItem(14, createItem(Material.BOOK, "Rules"));
-        menu.setItem(16, createItem(Material.BARRIER, "Close"));
-
-        player.openInventory(menu);
+    private String color(String text) {
+        return ChatColor.translateAlternateColorCodes('&', text);
     }
 
-    private ItemStack createItem(Material material, String name) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(name);
-            item.setItemMeta(meta);
+    private void openMenu(Player player) {
+        int size = getConfig().getInt("menu.size", 27);
+        if (size < 9 || size > 54 || size % 9 != 0) {
+            size = 27;
         }
-        return item;
+
+        String title = color(getConfig().getString(
+                "menu.title", "&cRudolph Menu"));
+
+        MenuHolder holder = new MenuHolder();
+        Inventory inventory = Bukkit.createInventory(holder, size, title);
+        holder.inventory = inventory;
+
+        ConfigurationSection items = getConfig()
+                .getConfigurationSection("items");
+
+        if (items != null) {
+            for (String key : items.getKeys(false)) {
+                ConfigurationSection item = items.getConfigurationSection(key);
+                if (item == null) continue;
+
+                int slot = item.getInt("slot", -1);
+                if (slot < 0 || slot >= size) continue;
+
+                Material material = Material.matchMaterial(
+                        item.getString("material", "STONE"));
+
+                if (material == null || !material.isItem()
+                        || material == Material.AIR) {
+                    material = Material.STONE;
+                }
+
+                ItemStack stack = new ItemStack(material);
+                ItemMeta meta = stack.getItemMeta();
+
+                if (meta != null) {
+                    meta.setDisplayName(color(
+                            item.getString("name", key)));
+                    stack.setItemMeta(meta);
+                }
+
+                inventory.setItem(slot, stack);
+                holder.commands.put(slot,
+                        item.getString("command", ""));
+            }
+        }
+
+        player.openInventory(inventory);
     }
 
     @EventHandler
-    public void onMenuClick(InventoryClickEvent event) {
-        if (!event.getView().getTitle().equals(menuTitle)) return;
+    public void onClick(InventoryClickEvent event) {
+        if (!(event.getView().getTopInventory().getHolder()
+                instanceof MenuHolder)) {
+            return;
+        }
 
         event.setCancelled(true);
 
         if (!(event.getWhoClicked() instanceof Player)) return;
-        if (event.getClickedInventory() != event.getView().getTopInventory()) return;
+
+        if (event.getClickedInventory()
+                != event.getView().getTopInventory()) {
+            return;
+        }
 
         Player player = (Player) event.getWhoClicked();
+        MenuHolder holder = (MenuHolder)
+                event.getView().getTopInventory().getHolder();
 
-        switch (event.getRawSlot()) {
-            case 10:
-                player.closeInventory();
-                player.performCommand("spawn");
-                break;
-            case 12:
-                player.closeInventory();
-                player.performCommand("home");
-                break;
-            case 14:
-                player.closeInventory();
-                player.performCommand("rules");
-                break;
-            case 16:
-                player.closeInventory();
-                break;
-            default:
-                break;
+        String action = holder.commands.get(event.getRawSlot());
+        if (action == null || action.isEmpty()) return;
+
+        player.closeInventory();
+
+        if (action.equalsIgnoreCase("close")) return;
+
+        // Run a command as the player.
+        // Leading slashes are optional.
+        String playerCommand = action.startsWith("/")
+                ? action.substring(1) : action;
+
+        Bukkit.getScheduler().runTask(this,
+                () -> player.performCommand(playerCommand));
+    }
+
+    private static class MenuHolder implements InventoryHolder {
+        private Inventory inventory;
+        private final Map<Integer, String> commands = new HashMap<>();
+
+        @Override
+        public Inventory getInventory() {
+            return Objects.requireNonNull(inventory);
         }
     }
 }
